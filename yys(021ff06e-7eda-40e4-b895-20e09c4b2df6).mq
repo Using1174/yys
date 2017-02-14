@@ -1,24 +1,36 @@
 /**
-2017-01-04
+2017-02-08
 For 阴阳师1.0.13
 */
 // set state
-Dim MapState=3 //0-觉醒，1-御魂，2-返回大厅，3-结界突破,4-副本
-Dim AfterJjtpState=4 // 打完结界打什么：0-觉醒，1-御魂，4-副本
+Dim MapState=4 //0-觉醒，1-御魂，2-返回大厅，3-结界突破,4-副本，5-被动接受邀请，6-副本主动组队，7-副本主动组队公会
+Dim AfterJjtpState=4 // 打完结界打什么：0-觉醒，2-返回大厅，1-御魂，4-副本，5-被动接受邀请，6-副本主动组队好友，7-副本主动组队公会
 Dim JXState=0 //0-随机，1-火麒麟，2-风麒麟，3-水麒麟，4-雷麒麟
+Dim FubenSelect=0 // 0-倒数第一章，1-倒数一二章，...
+Dim FubenLevel=0 // 0-困难，1-普通
 Dim YHState=0 // 0-八岐大蛇，1-业原火
-Dim TextDelay=6*60*1000// 发送文本间隔
+Dim TextDelay=3*60*1000// 发送文本间隔
+Dim textCount=-1
 Dim Douji12=True
 Dim Douji21=True
-Dim textCount=0
+Dim JH=False // 集火
+Dim Xsrw=True// 接受悬赏任务
+Dim ChildState = 0 // 狗粮选择
+Dim ChildPage = 25 // 式神翻页
+Dim LeaderInx= 1 // 队长，0-没有队长，1-左数第一个，2-第二个,3-第三个
+
+Dim tuzi10 = False // 兔子天团模式
+Dim Auto = False // 自动模式
 // runtime state
-Dim initMapState=3 //0-觉醒，1-御魂，2-返回大厅，3-结界突破,4-副本
+Dim curMapState = -1 //0-觉醒，1-御魂，2-返回大厅，3-结界突破,4-副本，5-被动接受邀请，6-副本主动组队
 Dim TingzhongState=0 //0-返回庭院，2-斗技，3-妖怪退治
 Dim MainState=0 //0-探索，1-町中
 Dim ConFailTimes=0 // 连续失败次数
-Dim TimeToDouji=False
 Dim StrengthEnough=True// 体力是否充足
-Dim WatchMaxLevel1=False,WatchMaxLevel2=False // 观战式神是否达到满级
+Dim unKnowInx = 0 // 手动识别指示
+// Dim WatchMaxLevel1=False,WatchMaxLevel2=False // 观战式神是否达到满级
+
+Dim jjtpInx=0 //结界突破攻击索引
 // 日常任务执行次数
 Dim lastChose=1
 Dim yhCount=0
@@ -26,46 +38,77 @@ Dim jxCount=0
 Dim fbCount=0
 Dim hasYgtz13=False
 Dim hasYgtz20=False
-load 
+Dim Jxyq=False// 组队结束继续邀请
+load()
 Randomize
+// 副本扫荡指示
+Dim SA(8)
+SA(0) = 0
+SA(1) = 0
+SA(2) = 0
+SA(3) = 0
+SA(4) = 1
+SA(5) = 1
+SA(6) = 1
+SA(7) = 1
+// 副本扫荡索引
+Dim saInx=0
 Delay 3000
 While True
-    ReleaseCapture
-    startFight()
+    ReleaseCapture 
+    If tuzi10 Then 
+        tuziRun()
+    Else
+        startFight()
+    End If
     //simpleHelp()
 Wend
 EndScript
-
 Function load()
     AfterJjtpState=ReadUIConfig("下拉框1")
     JXState = ReadUIConfig("下拉框2")
+    FubenSelect = ReadUIConfig("下拉框3")
+    FubenLevel = ReadUIConfig("下拉框4")
+    ChildState = ReadUIConfig("下拉框5")
+    LeaderInx = ReadUIConfig("下拉框6")
+    Auto = iif(ReadUIConfig("下拉框Auto") <> 0, False, True)
+    ChildPage = CLng(ReadUIConfig("输入框1"))
     yhCount = ReadUIConfig("下拉框御魂")
     jxCount = ReadUIConfig("下拉框觉醒")
     fbCount=ReadUIConfig("下拉框副本")
     Douji12 = ReadUIConfig("Douji12")
     Douji21 = ReadUIConfig("Douji21")
     hasYgtz13 = (ReadUIConfig("Ygtz13")<>True)
-    hasYgtz20= (ReadUIConfig("Ygtz20")<>True)
+    hasYgtz20 = (ReadUIConfig("Ygtz20") <> True)
+    Jxyq = ReadUIConfig("Jxyq")
+    JH = ReadUIConfig("Jh")
+    Xsrw = ReadUIConfig("Xsrw")
+    tuzi10 = ReadUIConfig("Tuzi")
+    TracePrint "兔子模式："&CStr(tuzi10)
+    ShowMessage "兔子模式："&iif(tuzi10,"开","关")
+    
 End Function
 
-Function updateTimeState()	
+Function updateTimeState()
+    Dim TimeToTZ=False
     Dim h=DateTime.Hour(),m=DateTime.Minute(),s=DateTime.Second()
     // 12-13点，21-22点斗技
     If (hasYgtz13=False And h=13) Or (hasYgtz20 = False And h=20) Then 
-        ShowMessage "妖怪退治时间"        	
+        ShowMessage "妖怪退治时间"
+        TimeToTZ = True
         MainState = 1
         TingzhongState = 3
     ElseIf ((h = 12 And Douji12) Or (h = 21 And Douji21))Then 
         ShowMessage "斗技时间到"
-        TimeToDouji = True
+        TimeToTZ = True
         MainState = 1
         TingzhongState = 2
     Else 
-        TimeToDouji = False
+        TimeToTZ = False
         MainState = 0
         TingzhongState = 0
     End If    
-    updateTimeState=TimeToDouji
+    updateTimeState=TimeToTZ
 End Function
 
 Function reMap()	
@@ -83,45 +126,12 @@ Function reMap()
         ShowMessage "副本日常未完成，进度："&fbCount&"/3"
         MapState = 4
     Else      	
-        ShowMessage "状态："&AfterJjtpState
+        ShowMessage "状态："&AfterJjtpState&":"&curMapState
         MapState=AfterJjtpState 
     End If
     If StrengthEnough <> True Then 
         MapState = 3
     End If
-End Function
-
-Function simpleHelp()
-    //    KeepCapture 
-    If isLoad0Scene() Then 
-        closeGonggao()        
-    ElseIf  isLoadScene() Or isPreLoadScene() Or  isLoadWaitScene() Then
-        ShowMessage "登陆加载界面"
-        entergame()
-    ElseIf isMainScene0() Then	
-        Touch 154, 1818, 100
-    ElseIf isUpdateScene() Then
-        // 新版本更新--确定
-        Touch 446,1144,100
-    ElseIf isReadyScene() Then
-        ShowMessage "准备战斗"
-        zhunbei()
-        Delay 2000
-        setAutoFight()
-    ElseIf isWinScene() Then
-        ShowMessage "战斗胜利"
-        For 3
-            If isMapScene() <> True Then         			
-                fightAsset 
-                Delay 500
-            End If
-        Next
-    ElseIf isFailScene() Then
-        ShowMessage "战斗失败"
-        fightAsset 
-    End If
-    //    ReleaseCapture 
-    Delay 2000
 End Function
 
 Function startFight()
@@ -140,7 +150,12 @@ Function startFight()
             Select Case TingzhongState
             Case 3
                 ShowMessage "妖怪退治"
-                ygtz
+                ygtz 
+                If DateTime.Hour() = 13 Then 
+                    hasYgtz13 = True
+                ElseIf DateTime.Hour() = 20 Then
+                    hasYgtz20=True
+                End If
             Case 2
                 ShowMessage "刷斗技"
                 douji
@@ -149,20 +164,28 @@ Function startFight()
                 tingyuan
             End Select
             Delay 2000
-        ElseIf isMainScene() Then
-            // 屏幕划到最左边
-            swipeLeft()
-            getStrengthGift()
-            //探索
-            Select Case MainState
-            Case 1
-                ShowMessage "进入町中"
-                tingzhong 
-            Case Else
-                ShowMessage "探索"
-                ts 
-                tingyuan
-            End Select  
+        ElseIf isMainScene() Then    
+            getStrengthGift 
+            If CmpColorEx("204|1091|0101FA", 1.0) = 1 Then 
+                ShowMessage "领取任务奖励"
+                Touch 204, 1091, 100
+                Delay 1000
+            Else            	      
+                // 屏幕划到最左边
+                swipeLeft 
+                //探索
+                Select Case MainState
+                Case 1
+                    ShowMessage "进入町中"
+                    tingzhong 
+                Case Else
+                    ShowMessage "探索"
+                    ts 
+                    tingyuan
+                End Select  
+            End If
+        ElseIf isMissionScene() Then
+            finishMission()
         ElseIf isMainScene0() Then
             // 登陆加载
             Touch 154, 1818, 100
@@ -199,41 +222,52 @@ Function startFight()
                 Case 3
                     ShowMessage "刷结界突破"
                     jjtp()
-                Case 4
+                Case 4,6,7
                     ShowMessage "刷副本"
+                    saInx = 0
                     // 重置
-                    //For 3
-                    //    Swipe 171, 1761, 702, 1761, 500	
-                    //Next
-                    //Delay 1500
+                    For 4
+                        Swipe 121, 1761, 800, 1761	
+                    Next
+                    Delay 1200
                     // 行高177
-                    //Swipe 770, 1761, 171, 1761, 500                    
-                    //Delay 1000
-                    // 12章
-                    //Touch 440,1719,100
-                    // 11章
-                    //Touch 640, 1719, 100
-                    // 13章
-                    // Touch 276,1800,100
-                    
+                    Dim se = FubenSelect                    
+                    If FubenSelect >= 5  Then 
+                        Swipe 820, 1761, 110, 1761, 500
+                        Swipe 220, 1761, 80, 1761,500
+                        Delay 1000
+                        se=se-5
+                    End If                    
+                    Select Case se
+                    Case 4
+                        // 15章——倒数第五章
+                        Touch 858,1757,100
+                    Case 3
+                        // 16章——倒数第四章
+                        Touch 728,1776,100
+                    Case 2                    	
+                        // 17章——倒数第三章
+                        Touch 559,1764,100
+                    Case 1                    	
+                        // 18章——倒数第二章
+                        Touch 365,1743,100
+                    Case 0                    	
+                        // 番外章——倒数第一章
+                        Touch 226,1788,100
+                    End Select
                     //---------------------------------
-                    // 15章——倒数第五章
-                    //Touch 858,1757,100
-                    // 16章——倒数第四章
-                    Touch 728,1776,100
-                    // 17章——倒数第三章
-                    // Touch 559,1764,100
-                    // 18章——倒数第二章
-                    // Touch 365,1743,100
-                    // 番外章——倒数第一章
-                    // Touch 226,1788,100
+                    Delay 500
+                Case 5
+                    // 被动接受邀请
+                    ShowMessage "被动状态，等待邀请"
                 Case Else
                     ShowMessage "打御魂"
                     yh()
                 End Select                
-                Delay 1500
+                Delay 500
             End If
         ElseIf isYhSelectScene() Then
+            curMapState=1
             lastChose=1
             yhCount = yhCount + 1
             If YHState = 0 Then 
@@ -244,6 +278,7 @@ Function startFight()
                 Touch 469,1339,100
             End If
         ElseIf isJxSelectScene() Then
+            curMapState=0
             lastChose = 0
             jxCount=jxCount+1
             Dim rd=4*Rnd()
@@ -271,37 +306,53 @@ Function startFight()
             Touch 894,1573,100
         ElseIf isReadyScene() Then
             ShowMessage "准备战斗"
-            If (WatchMaxLevel1 Or WatchMaxLevel2) And MapState=4 Then 
-                // 更换式神
-                ShowMessage "更换式神"
-                changeShiShen()          	
+            //If (WatchMaxLevel1 Or WatchMaxLevel2) And curMapState=4 Then 
+            // 更换式神
+            //ShowMessage "更换式神"
+            //changeShiShen()          	
+            //End If
+            //Delay 300
+            If curMapState = 4 Then                    	
+                exchangeExpMon()
             End If
-            Delay 300
             zhunbei()
-            Delay 2000
-            setAutoFight()
+            If JH Then             	
+                Delay 900
+                pointMon()
+            End If
+            Delay 1000
+            If Auto<> True And curMapState=4 Then  
+                setHand
+            Else            	
+                setAutoFight
+            End If
         ElseIf isWinScene() Then
             ShowMessage "战斗胜利"
-            Delay 1500
-            KeepCapture
-            If isLevelMax1() Then             
-                ShowMessage "观战式神1 经验满"
-                WatchMaxLevel1=True
-            End If
-            If isLevelMax2() Then             	
-                ShowMessage "观战式神2 经验满"
-                // 式神经验满级
-                WatchMaxLevel2=True
-            End If
+            // Delay 1500
+            // KeepCapture
+            //If isLevelMax1() And curMapState = 4 Then             
+            //ShowMessage "观战式神1 经验满"
+            // WatchMaxLevel1=True
+            //End If
+            //If isLevelMax2() And curMapState = 4 Then             	
+            //ShowMessage "观战式神2 经验满"
+            // 式神经验满级
+            // WatchMaxLevel2=True
+            //End If
             // 重置连败次数
             ConFailTimes = 0
-            ReleaseCapture
-            For 7
+            // ReleaseCapture
+            For 6
                 // If isMapScene() <> True Then         			
                 fightAsset 
                 Delay 300
                 // End If
             Next
+        ElseIf isExitFubenScene() Then
+            //取消
+            Touch 481, 755, 100
+            // 确定
+            // Touch 479, 1160, 100  
         ElseIf isRewardScene() Then
             ShowMessage "领取奖励"
             For 3
@@ -316,27 +367,44 @@ Function startFight()
             ConFailTimes=ConFailTimes+1
             fightAsset 
         ElseIf isCancleOKScene() Then
-            cancel()            
+            If Jxyq Then         	
+                ok 
+            Else         
+                cancel() 
+            End If
         ElseIf isBuyStrengthScene() Then
-            ShowMessage "体力不足！"
+            // 等待15分钟
+            Dim twt= 15 * 60 * 1000
+            Dim wt=twt\5000
+            For i=0 To wt
+                ShowMessage "体力不足！等待中…" & i & "/" & wt
+                Delay 5000
+            Next            
             closeStrength 
             StrengthEnough=False
             MapState=3 //打结界突破去
             Delay 5000
             //buyStrength()
         ElseIf isXuanshangIvtScene() Then
-            // 悬赏接受
-            // xuanshangAct()
-            // 拒绝
-            ShowMessage "拒绝悬赏任务"
-            xuanshangRej()
+            If Xsrw Then         
+                // 悬赏接受
+                xuanshangAct()             
+                ShowMessage "接受悬赏任务"
+            Else         	
+                // 拒绝
+                xuanshangRej()            
+                ShowMessage "拒绝悬赏任务"
+            End If
+         
         ElseIf isCreateRoomScene() Then
-            crt()
+            crt 
+        ElseIf isCreateTeamScene() Then
+            Touch 351,958,200
         ElseIf isInTeamScene() Then
             ReleaseCapture 
             Dim autoStop=False
             Dim count=0
-            For 48
+            For 32
                 KeepCapture 
                 If ConFailTimes < 2 And isInVited() Then 
                     // 连败不接受邀请
@@ -348,17 +416,18 @@ Function startFight()
                     count=count+1
                     Delay 500
                 Else 
-                    autoStop=True
+                    autoStop = True
+                    ReleaseCapture
                     Exit For                
                 End If
                 ReleaseCapture
             Next
-            // 若刷完72次没有找到合适的房间
-            If autoStop <> True Or count >= 48 Then 
+            // 若刷完48次没有找到合适的房间
+            If autoStop <> True Or count >= 32 Then 
                 ShowMessage "没有房间，自己创建"
-                createRoom()
+                createRoom 
+                Delay 1000
             End If
-            
         ElseIf isTeamScene() Then
             // 组队
             team 
@@ -373,23 +442,66 @@ Function startFight()
             End If
         ElseIf isFubenScene() Then
             ShowMessage "副本内"
+            curMapState = 4
             sweepFuben2
             KeepCapture
             If isFubenSelectScene() Then         	
                 // 扫描结束后关闭误点出来的其他副本界面
                 Tap 862, 1586
-            End If
+            End If            
+        ElseIf isYgtzStartScene() Then
+            ShowMessage "妖怪退治挑战"
+            Touch 290, 1416, 100
+            Delay 1000
         ElseIf isFubenSelectScene() Then
             lastChose = 4
             fbCount=fbCount+1
-            ShowMessage "副本探索"
-            // 困难
-            Touch 744, 719, 100
-            // 普通
-            // Touch 744,506,100
-            Delay 500
-            fbTansuo 
+            If FubenLevel <> 0 Then 
+                // 普通
+                Touch 744,506,100
+            Else 
+                // 困难
+                Touch 744, 719, 100
+            End If
+            
+            If MapState = 6 Or MapState=7 Then 
+                ShowMessage ""
+                Delay 200
+                fbZudui 
+                Delay 2000
+            Else             
+                ShowMessage "副本探索"
+                fbTansuo
+            End If
+        ElseIf isFubenTeamScene() Then
+            Dim teamSelect=0 // 0-好友，1-寮友
+            If CmpColorEx("855|729|9EC8E9,857|767|9EC8E9,850|851|9EC8E9",1.0) = 1 Then 
+                // 好友
+                If MapState <> 6 Then         	
+                    // 选寮友
+                    Touch 889, 612, 100
+                    Delay 1000
+                End If                
+            Else 
+                // 寮友
+                If MapState <> 7 Then        	
+                    // 选好友
+                    Touch 886, 785, 100
+                    Delay 1000
+                End If
+            End If
+            // x=-120,y=500
+            ReleaseCapture
+            Dim x1=778,y1=669
+            If CmpColorEx(x1&"|"&y1&"|CECCB8-030303", 1.0) <> 1 Then             	
+                Touch x1, y1, 100
+            End If
+            // 取消
+            // Touch 220,754,100
+            // 邀请
+            Touch 224,1162,100            
         ElseIf isJjtpScene() Then
+            curMapState=3
             ShowMessage "结界突破"
             If ConFailTimes >= 2 Then 
                 ShowMessage "连败" & ConFailTimes & "次，重新刷新！"
@@ -397,7 +509,8 @@ Function startFight()
                 Delay 1000
                 Touch 437, 1141, 100
                 Delay 1000
-                ConFailTimes=0
+                ConFailTimes = 0
+                jjtpInx = 0
             End If
             If canJjtpExit() Then 
                 ShowMessage "没有突破券了"
@@ -412,45 +525,85 @@ Function startFight()
             Touch 170, 1078, 100
         ElseIf isDoujiScene() Then
             ShowMessage "刷斗技"
+            curMapState = 2
             Touch 181, 1684, 100
             // 防止不在时间内
             Delay 2000
             windExit 
-        ElseIf isYgtzScene() Then
+        ElseIf isYgtzScene() Then        
+            ReleaseCapture
+            Delay 1000
             ygtzScan 
             Delay 1000
-        ElseIf isYgtzStartScene() Then
-            ShowMessage "妖怪退治挑战"
-            Touch 290, 1416, 100
-            Delay 1000
-            
-            If DateTime.Hour() = 13 Then 
-                hasYgtz13 = True
-            ElseIf DateTime.Hour() = 20 Then
-                hasYgtz20=True
-            End If
         ElseIf isFighting() Then
             ShowMessage "正在战斗中"
-            setAutoFight 
-            If MapState = 3 Then 
-                // 打结界，集火
-                ShowMessage "集火"
-                Touch 710,464,300
-                Touch 662,710,300               
-                Touch 696,958,300
-                Touch 710,1206,300
-                Touch 732,1421,300
-            End If
-            Dim cal=TickCount()\TextDelay
-            If cal > textCount Then             
-                textCount = cal
-                If MapState = 2 Then 
-                    sendText "挂机了"
-                ElseIf MapState < 3 Then                	
-                    sendText "挂机了"
+            If Auto <> True And curMapState = 4 Then             	
+                setHand                 
+                If dirMoved() Then 
+                    Touch 220, 60, 100
+                    ShowMessage "等待视角复位"
+                    Delay 4000
                 End If
-            Else 
-                Delay 2000
+                Delay 1000
+                KeepCapture 
+                Dim find=True                
+                If isEmyAtk() Then 
+                    // 等待中
+                    find=False
+                    // Delay 500
+                ElseIf isShenle() Then 
+                    ShowMessage "神乐"
+                    unKnowInx = 0
+                    // 带了鱼-放鱼，带了疾风-放中间技能
+                    If isYu() Or isJifeng() Then 
+                        skill2 
+                    Else 
+                        skill3
+                    End If                
+                ElseIf isYuanboya() Then
+                    ShowMessage "源博雅"
+                    unKnowInx = 0
+                    If skill3Enable() Then 
+                        skill3      
+                    Else
+                        skill2     
+                    End If               
+                ElseIf isShfagui() Then
+                    unKnowInx = 0
+                    skill3	
+                Else 
+                    //                    find=False         	
+                    //                    If unKnowInx >= 1 Then 
+                    //                        // 未知式神出现三次，视为被未知式神卡住了
+                    //                        // ShowMessage "未知式神攻击"
+                    //                        find=True
+                    //                    End If
+                    //                    unKnowInx = (unKnowInx + 1) Mod 2
+                End If
+                If find Then                 	
+                    fubenQiYu
+                    pointMon 
+                    fubenEmy 
+                    // Delay 1000
+                End If
+            Else                              	
+                setAutoFight 
+                If JH Then 
+                    // 集火
+                    pointMon()
+                End If                
+                Dim cal=TickCount()\TextDelay
+                If cal > textCount Then             
+                    textCount = cal
+                    If curMapState = 2 Then 
+                        // 斗技
+                        sendText "挂机了"
+                    ElseIf curMapState < 3 And curMapState>=0 Then                	
+                        sendText "挂机了"
+                    End If
+                Else 
+                    Delay 2000
+                End If
             End If
         ElseIf isYgfxScene() Then
             Touch 260, 1522, 100
@@ -469,12 +622,23 @@ Function startFight()
             Touch 759, 704, 100
             Delay 1000
             // 送信
-            songxin()
+            songxin 
+        ElseIf isExitFightScene() Then
+            // 取消
+            Touch 450, 766, 100
+            //确定
+            // Touch 450,1135,100      	
         ElseIf isHdjlScene() Then
             // 获得奖励界面
             ShowMessage "获得奖励"
             //  Touch 732,1448,100
             windExit 
+        ElseIf isSsspScene() Then
+            // 式神碎片-关闭
+            Touch 837,1566,100
+        ElseIf isHdScene() Then
+            // 活动界面-关闭
+            Touch 1010, 69, 100
         ElseIf isDisConnectScene() Then
             // 断开服务器，需要重连
             ShowMessage "连接断开，重新连接"
@@ -512,7 +676,6 @@ Function startFight()
         Delay 1000
     Wend 
 End Function
-
 Function setAutoFight()
     ReleaseCapture
     For 5
@@ -522,80 +685,70 @@ Function setAutoFight()
             Delay 2000
         End If
     Next
-    KeepCapture
 End Function
-
 Function isCancleOKScene()
-    If CmpColorEx("443|692|5169DD-202020,450|876|5169DD-202020,455|1034|5FB2F4-202020,456|1233|5FB2F4,702|977|9BB4CC",0.9) = 1 Then
+    If CmpColorEx("443|692|5169DD-101010,450|876|5169DD-101010,455|1034|5FB2F4-101010,456|1233|5FB2F4,702|977|9BB4CC",0.9) = 1 Then
         TracePrint "test isCancleOKScene true"
         isCancleOKScene= True
     Else
-        TracePrint "test isTipCancleOKScene fail"
+        // TracePrint "test isTipCancleOKScene fail"
         isCancleOKScene= False
     End If
 End Function
-
-
 Function isPreLoadScene()
     If CmpColorEx("539|418|5B4BF0,466|1018|5040F5,406|1204|D2B97F,870|1279|D7E2F0",0.9) = 1 Then
         TracePrint "test true"
         isPreLoadScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isPreLoadScene = False
     End If
 End Function
-
 Function isLoad0Scene()
     If CmpColorEx("940|837|2C354C,941|1087|2A334B,424|1635|1C1CA9,677|261|5C1819",0.9) = 1 Then
         TracePrint "test true"
         isLoad0Scene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isLoad0Scene = False
     End If
 End Function
-
 Function isLoadScene()
     If CmpColorEx("575|337|D8CECC,507|702|D5EBFF,495|1234|B89458,502|1605|CECBCE",0.9) = 1 Then
         TracePrint "test true"
         isLoadScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isLoadScene = False
     End If
 End Function
-
 Function isLoadWaitScene()
     If CmpColorEx("345|486|201852,459|756|2B0A9C,424|1332|ACACAC,469|1574|A9804E",0.9) = 1 Then
         TracePrint "test true"
         isLoadWaitScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isLoadWaitScene = False
     End If
 End Function
-
 Function isMainScene0()
     If CmpColorEx("244|1860|121A33,58|1751|1A126D,138|1792|13247B,158|1829|C8D0E0,1037|1738|A4C5D6",0.9) = 1 Then
         TracePrint "test isMainScene0 true"
         isMainScene0= True
     Else
-        TracePrint "test isMainScene0 fail"
+        // TracePrint "test isMainScene0 fail"
         isMainScene0= False
     End If
 End Function
-
 Function isMainScene()
     If CmpColorEx("208|6|0C1445,31|7|0B1143,156|375|E8E8E8,129|1872|C6CEDF,154|1871|C8D0E0,1037|1858|A2C4D5,1014|1861|A2C4D5,995|1910|1D4677",0.9) = 1 Then
         TracePrint "test isMainScene true"
         isMainScene = True
     Else
-        TracePrint "test isMainScene false"
+        // TracePrint "test isMainScene false"
         isMainScene = False
     End If
 End Function
-
 Function isMapScene()
     If CmpColorEx("96|240|0F0F1D-101010,78|440|D63152-101010,49|781|1A1A2A-101010",0.9) = 1 Then
         isMapScene=True
@@ -603,100 +756,90 @@ Function isMapScene()
         isMapScene=False
     End If
 End Function
-
 Function isYhSelectScene()
     If CmpColorEx("236|97|20DEFF,237|1817|20DEFF,745|199|C0C9D5,816|1045|C8D8E1",0.9) = 1 Then
         TracePrint "test true"
         isYhSelectScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isYhSelectScene = False
     End If
 End Function
-
 Function isJxSelectScene()
-    If CmpColorEx("179|406|293A8C-202020,176|817|7C8D38-202020,180|1218|A68543-202020",0.9) = 1 Then
+    If CmpColorEx("179|406|293A8C-101010,176|817|7C8D38-101010,180|1218|A68543-101010",1.0) = 1 Then
         TracePrint "test isJxSelectScene true"
         isJxSelectScene= True
     Else
-        TracePrint "test isJxSelectScene fail"
+        // TracePrint "test isJxSelectScene fail"
         isJxSelectScene= False
     End If
 End Function
-
 Function isInVited()
     If CmpColorEx("710|56|5B6CDF,699|196|61B358,749|17|A7C0D8,673|237|94A7BB",0.9) = 1 Then
         TracePrint "test true"
         isInVited = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isInVited = False
     End If
 End Function
-
 Function isReadyScene()
     If CmpColorEx("117|1663|060D60,117|1848|0F22B2,92|1663|71AEDA,45|1841|B0DDF3",0.9) = 1 Then
         TracePrint "test true"
         isReadyScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isReadyScene = False
     End If
 End Function
-
 Function isWinScene()
     If CmpColorEx("850|506|92D6E5,840|716|10197F,727|867|A49B9C,774|691|121C9E,701|738|B1CAD8",0.9) = 1 Then
         TracePrint "test true"
         isWinScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isWinScene = False
     End If
 End Function
-
 // 在战斗胜利的条件下，一号观战式神的等级是否达到最大
 Function isLevelMax1()
     If CmpColorEx("336|529|393426,336|530|482F2B,336|531|55352E,336|532|5A3931,336|533|5C3B33",0.98) = 1 Then
         TracePrint "test isLevelMax1 true"
         isLevelMax1= True
     Else
-        TracePrint "test isLevelMax1 fail"
+        // TracePrint "test isLevelMax1 fail"
         isLevelMax1= False
     End If
 End Function
-
 // 在战斗胜利的条件下，二号观战式神的等级是否达到最大
 Function isLevelMax2()
     If CmpColorEx("338|868|48302B,338|869|54362F,338|870|583931,337|871|5C3B33,337|872|583C34",0.98) = 1 Then
         TracePrint "test isLevelMax2 true"
         isLevelMax2= True
     Else
-        TracePrint "test isLevelMax2 fail"
+        // TracePrint "test isLevelMax2 fail"
         isLevelMax2= False
     End If
 End Function
-
 Function isRewardScene()
-    Dim r=( CmpColorEx("188|848|0C0A67-202020,157|1078|040237-202020,146|885|040234-202020,303|1135|1891D0,308|823|1C28BA",0.9) = 1 )
-    If CmpColorEx("355|876|040233-202020,363|1086|040237-202020,602|1059|909D90-202020",0.9) = 1 Or r Then
+    Dim r=( CmpColorEx("188|848|0C0A67-101010,157|1078|040237-101010,146|885|040234-101010,303|1135|1891D0,308|823|1C28BA",0.99) = 1 )
+    If CmpColorEx("355|876|040233-101010,363|1086|040237-101010,602|1059|909D90-101010",0.99) = 1 Or r Then
         TracePrint "test isRewardScene true"
         isRewardScene= True
     Else
-        TracePrint "test isRewardScene fail"
+        // TracePrint "test isRewardScene fail"
         isRewardScene= False
     End If
 End Function
-
 Function isFailScene()
     If CmpColorEx("868|484|A2C6CD,854|701|5D4B51,795|741|625058,723|729|8BA8BD,706|830|3A454B",0.9) = 1 Then
-        TracePrint "test true"
+        TracePrint "test fail true"
         isFailScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isFailScene = False
     End If
 End Function
-
 Function isFighting()
     If CmpColorEx("994|1882|161F2F,141|22|714A52,221|1914|694A53,147|1914|4A4049",0.9) = 1 Then
         isFighting = True
@@ -704,7 +847,6 @@ Function isFighting()
         isFighting = False
     End If
 End Function
-
 Function isAuto()
     If CmpColorEx("85|144|4B6579,44|936|1A1A2A,2|340|1A1A2B,41|731|1A1A2A",0.9) = 1 Then
         isAuto = True
@@ -712,7 +854,6 @@ Function isAuto()
         isAuto = False
     End If
 End Function
-
 Function isNotAuto()
     If CmpColorEx("73|64|DEF1F6,89|77|C9DBE0,85|48|D9EBF0,97|64|DFF2F7",0.9) = 1 Then
         isNotAuto = True
@@ -720,80 +861,81 @@ Function isNotAuto()
         isNotAuto = False
     End If
 End Function
-
 Function isTeamScene()
     If CmpColorEx("442|811|96AFC8,344|1025|5FB2F4,343|1490|5FB2F4,897|1577|CCD4E5",0.9) = 1 Then
-        TracePrint "test true"
+        TracePrint "test isTeamScene true"
         isTeamScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isTeamScene = False
     End If
 End Function
-
 Function isInTeamScene()
     If CmpColorEx("995|110|505050,859|286|BED6E7,134|1219|5FB2F4,63|1663|1D1D25",0.9) = 1 Then
-        TracePrint "test true"
+        TracePrint "test isInTeamScene true"
         isInTeamScene = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         isInTeamScene = False
     End If
 End Function
-
 Function isRoomScene()
     If CmpColorEx("911|231|A7B1BB,183|344|5169DD,181|568|5169DD,186|1656|B5BDC6,988|1692|263748",0.9) = 1 Then
         TracePrint "test isRoomScene true"
         isRoomScene= True
     Else
-        TracePrint "test isRoomScene fail"
+        // TracePrint "test isRoomScene fail"
         isRoomScene= False
     End If
 End Function
-
 Function canJoin()
     If CmpColorEx("773|1508|5FB4D8,766|1662|5AAFD1,766|1476|B4CDDE,771|1638|254670",0.9) = 1 Then
-        TracePrint "test true"
+        TracePrint "test canJoin true"
         canJoin = True
     Else
-        TracePrint "test fail"
+        // TracePrint "test fail"
         canJoin = False
     End If
 End Function
-
 Function canRoomStart()
     //开始按钮为灰的情况
     If CmpColorEx("202|346|5169DD,153|559|5169DD,204|1369|A1A9B1,156|1564|A1A9B1",0.9) = 1 Then
-        TracePrint "test fail"
+        // TracePrint "test fail"
         canRoomStart = False
     Else
-        TracePrint "test true"
+        TracePrint "test canRoomStart true"
         canRoomStart = True
     End If
 End Function
-
 Function isCreateRoomScene()
     If CmpColorEx("240|548|5169DD,184|518|472689,241|1388|5FB2F4,185|1400|2A3B95,876|1186|9BB4CC",0.9) = 1 Then
         TracePrint "test isCreateRoomScene true"
         isCreateRoomScene= True
     Else
-        TracePrint "test isCreateRoomScene fail"
+        // TracePrint "test isCreateRoomScene fail"
         isCreateRoomScene= False
     End If
 End Function
-
+Function isCreateTeamScene()
+    If CmpColorEx("860|602|1E2737,855|1292|202939,834|1335|2D2D56,747|1333|222043,293|802|60B3F5,292|1118|5DB2F6,233|1153|191921",0.95) = 1 Then
+        TracePrint "test isCreateTeamScene true"
+        isCreateTeamScene = True
+    Else
+        // TracePrint "test isCreateTeamScene false"
+        isCreateTeamScene = False
+    End If
+End Function
 Function isBuyStrengthScene()
-    If CmpColorEx("377|875|5FB2F4-202020,588|800|B7C8D8-202020,787|1402|D3D4E5-202020,481|536|938BB6,294|685|988D99",0.9) = 1 Then
+    If CmpColorEx("377|875|5FB2F4-101010,588|800|B7C8D8-101010,787|1402|D3D4E5-101010,481|536|938BB6,294|685|988D99",0.98) = 1 Then
         TracePrint "test isBuyStrengthScene true"
         isBuyStrengthScene= True
     Else
-        TracePrint "test isBuyStrengthScene fail"
+        // TracePrint "test isBuyStrengthScene fail"
         isBuyStrengthScene= False
     End If
 End Function
-
 Function isFubenScene()
-    If CmpColorEx("134|1464|1D171C-202020,77|1798|20181C-202020,140|1829|1C3343-202020,71|39|77565E,224|69|523193",0.9) = 1 Then
+    If CmpColorEx("134|1464|1D171C-101010,77|1798|20181C-101010,140|1829|1C3343-101010,71|39|77565E,224|69|523193",0.98) = 1 Then
         TracePrint "test isFubenScene true"
         isFubenScene= True
     ElseIf CmpColorEx("131|21|493538,212|67|38215D,151|9|452D2E,136|1543|111010,133|1803|111010,68|1796|121010", 0.97) = 1 Then
@@ -801,112 +943,102 @@ Function isFubenScene()
         TracePrint "test isFubenScene true"
         isFubenScene = True
     Else
-        TracePrint "test isFubenScene false"
+        // TracePrint "test isFubenScene false"
         isFubenScene = False
     End If
 End Function
-
 Function isYyhScene()
-    If CmpColorEx("353|1356|5FB2F4-202020,169|1275|98CAFF-202020,120|1037|FAFAF0-202020,814|794|AFB8C0,417|766|96AFC8",0.9) = 1 Then
+    If CmpColorEx("353|1356|5FB2F4-101010,169|1275|98CAFF-101010,120|1037|FAFAF0-101010,814|794|AFB8C0,417|766|96AFC8",0.98) = 1 Then
         TracePrint "test isYyhScene true"
         isYyhScene= True
     Else
-        TracePrint "test isYyhScene fail"
+        // TracePrint "test isYyhScene fail"
         isYyhScene= False
     End If
 End Function
-
 Function isFubenSelectScene()
-    If CmpColorEx("713|1651|23446D-202020,285|1348|5FB2F4-202020,835|401|97B0C9-202020,895|1477|263748,864|1583|CED6E7",0.9) = 1 Then
+    If CmpColorEx("713|1651|23446D-101010,285|1348|5FB2F4-101010,835|401|97B0C9-101010,895|1477|263748,864|1583|CED6E7",0.95) = 1 Then
         TracePrint "test isFubenSelectScene true"
         isFubenSelectScene= True
     Else
-        TracePrint "test isFubenSelectScene fail"
+        // TracePrint "test isFubenSelectScene fail"
         isFubenSelectScene= False
     End If
 End Function
-
 Function isXuanshangIvtScene()
-    If CmpColorEx("859|791|7992B3-202020,864|1149|7992B3-202020,444|1275|5FB257-202020,304|1278|5F6FDB,429|1302|363746",0.9) = 1 Then
+    If CmpColorEx("859|791|7992B3-101010,864|1149|7992B3-101010,444|1275|5FB257-101010,304|1278|5F6FDB,429|1302|363746",0.9) = 1 Then
         TracePrint "test isXuanshangIvtScene true"
         isXuanshangIvtScene= True
     Else
-        TracePrint "test isXuanshangIvtScene fail"
+        // TracePrint "test isXuanshangIvtScene fail"
         isXuanshangIvtScene= False
     End If
 End Function
-
 Function isJjtpScene()
-    If CmpColorEx("259|243|2053A8-202020,174|247|5FB2F4-202020,151|1681|3A2CD8-202020,149|817|DBDBDB,975|1773|D0D4E8,172|574|62451B",0.9) = 1 Then
+    If CmpColorEx("259|243|2053A8-101010,174|247|5FB2F4-101010,151|1681|3A2CD8-101010,149|817|DBDBDB,975|1773|D0D4E8,172|574|62451B",0.9) = 1 Then
         TracePrint "test isJjtpScene true"
         isJjtpScene= True
     Else
-        TracePrint "test isJjtpScene fail"
+        // TracePrint "test isJjtpScene fail"
         isJjtpScene= False
     End If
 End Function
-
 Function isJjtpCover()
-    If CmpColorEx("163|237|274965-202020,124|442|274965-202020,148|817|626262-202020,173|576|281D0C,152|1681|191259,979|1775|54575E",0.9) = 1 Then
+    If CmpColorEx("163|237|274965-101010,124|442|274965-101010,148|817|626262-101010,173|576|281D0C,152|1681|191259,979|1775|54575E",0.9) = 1 Then
         TracePrint "test isJjtpCover true"
         isJjtpCover= True
     Else
-        TracePrint "test isJjtpCover fail"
+        // TracePrint "test isJjtpCover fail"
         isJjtpCover= False
     End If
 End Function
-
 Function canJjtpExit()
     // 突破卷为0
-    Dim b1=(CmpColorEx("174|574|62471E-202020,148|635|343A3E,149|639|B5C6D5-202020,147|649|33393E,144|821|6C6C6C,152|1678|3E2EE0,147|622|B2C3D2",0.9) = 1)
+    Dim b1=(CmpColorEx("174|574|62471E-101010,148|635|343A3E,149|639|B5C6D5-101010,147|649|33393E,144|821|6C6C6C,152|1678|3E2EE0,147|622|B2C3D2",0.9) = 1)
     // 突破券为1
     Dim b2=False
-    //    Dim b2=( CmpColorEx("174|574|62471E-202020,139|642|202427-202020,149|642|2F3438-202020,159|642|23282B,144|821|6C6C6C,152|1678|3E2EE0,147|622|B2C3D2",0.9) = 1)
+    //    Dim b2=( CmpColorEx("174|574|62471E-101010,139|642|202427-101010,149|642|2F3438-101010,159|642|23282B,144|821|6C6C6C,152|1678|3E2EE0,147|622|B2C3D2",0.9) = 1)
     TracePrint b1,b2
     If b1 Or b2 Then
         TracePrint "test canJjtpExit true"
         canJjtpExit= True
     Else
-        TracePrint "test canJjtpExit fail"
+        // TracePrint "test canJjtpExit fail"
         canJjtpExit= False
     End If
 End Function
-
 Function isChatScene()
     If CmpColorEx("72|32|5F91EC,71|124|5F91EC,58|557|E9F1F9,75|633|5FB2F4,33|775|5FB2F4,1022|800|CED6E7",0.9) = 1 Then
         TracePrint "test isChatScene true"
         isChatScene = True
-    ElseIf CmpColorEx("1021|31|5FB2F4-202020,909|88|60B3F5-202020,1023|799|CED6E7-202020,276|50|24354D,67|20|24354D,21|797|233445", 0.9) = 1 Then    	        
+    ElseIf CmpColorEx("1021|31|5FB2F4-101010,909|88|60B3F5-101010,1023|799|CED6E7-101010,276|50|24354D,67|20|24354D,21|797|233445", 0.9) = 1 Then    	        
         TracePrint "test isChatScene true"
         isChatScene = True
         // 队伍
         Touch 221, 54, 100
     Else
-        TracePrint "test isChatScene false"
+        // TracePrint "test isChatScene false"
         isChatScene = False
     End If
 End Function
-
 Function isDoujiScene()
     If CmpColorEx("212|1756|A6C7E0,204|1686|202427,141|1630|202427,123|1614|A8D9F2,960|1769|DFE0FB,61|1721|051487",0.9) = 1 Then
         TracePrint "test isDoujiScene true"
         isDoujiScene = True
     Else
-        TracePrint "test isDoujiScene false"
+        // TracePrint "test isDoujiScene false"
         isDoujiScene = False
     End If
 End Function
-
 Function isTingZhongScene()
     If CmpColorEx("272|1501|302D25,256|1387|26261D,558|1582|959595,744|1610|ABABB4,735|1394|281F13",0.9) = 1 Then
         TracePrint "test isTingZhongScene true"
         isTingZhongScene = True
     Else
-        TracePrint "test isTingZhongScene false"
+        // TracePrint "test isTingZhongScene false"
         isTingZhongScene = False
     End If
 End Function
-
 Function canReturn()
     Dim b1=(CmpColorEx("1023|76|691930,990|78|E1CCC4,1009|101|E0CBC2,983|93|E0CBC2,961|71|29151C,948|123|24151D",0.9) = 1)
     Dim b2=(CmpColorEx("1011|101|E0CBC2,990|79|E1CCC4,971|109|D1B09F",0.9) = 1)
@@ -914,11 +1046,10 @@ Function canReturn()
         TracePrint "test canReturn true"
         canReturn = True
     Else
-        TracePrint "test canReturn false"
+        // TracePrint "test canReturn false"
         canReturn = False
     End If
 End Function
-
 Function canClose()
     Dim intX,intY
     FindMultiColor 0,0,0,0,"372760","-34|-2|CED6E7,-62|7|382F69,-38|32|472E68,-25|11|CED6E7",0,0.98,intX,intY
@@ -926,130 +1057,123 @@ Function canClose()
         TracePrint "test canclose true"
         canClose = True
     Else 
-        TracePrint "test canclose false"
+        // TracePrint "test canclose false"
         canClose=False
     End If
 End Function
-
 Function isShareScene()	
     If CmpColorEx("247|1589|35B03D,243|1630|35B03D,240|1566|14141A,235|1838|14141A,949|1771|CFD5E5,949|1741|CDD5E6",0.9) = 1 Then
         TracePrint "test isShareScene true"
         isShareScene = True
     Else
-        TracePrint "test isShareScene false"
+        // TracePrint "test isShareScene false"
         isShareScene = False
     End If
 End Function
-
 Function isKeyBoardScene()
     If CmpColorEx("771|28|5F91EC,820|55|9BB4CC,764|130|5F91EC,761|559|EBF3FA,759|603|24354D,762|625|5FB2F4",0.9) = 1 Then
         TracePrint "test isKeyBoardScene true"
         isKeyBoardScene = True
     Else
-        TracePrint "test isKeyBoardScene false"
+        // TracePrint "test isKeyBoardScene false"
         isKeyBoardScene = False
     End If
 End Function
-
 Function isHdjlScene()
     If CmpColorEx("717|598|202939,485|551|426C8D,715|1363|202939,424|1382|3E6889,598|1413|A1A1B1,598|512|A1A1B1",0.9) = 1 Then
         TracePrint "test isHdjlScene true"
         isHdjlScene = True
     Else
-        TracePrint "test isHdjlScene false"
+        // TracePrint "test isHdjlScene false"
         isHdjlScene = False
     End If
 End Function
-
 Function isMainOrMapChat()
     If CmpColorEx("1035|1465|0F1F38,1026|1178|0D1D36,1031|885|0F1F38,1020|884|0F1A32",0.9) = 1 Then
         TracePrint "test isMainOrMapChat true"
         isMainOrMapChat = True
     Else
-        TracePrint "test isMainOrMapChat false"
+        // TracePrint "test isMainOrMapChat false"
         isMainOrMapChat = False
     End If
 End Function
-
 Function isUpdateScene()
-    If CmpColorEx("799|907|29213A-202020,995|1411|734E4C-202020,1002|1043|514149-202020,469|724|5169DD,473|1070|5FB2F4,690|972|9BB4CC",0.9) = 1 Then
+    If CmpColorEx("799|907|29213A-101010,995|1411|734E4C-101010,1002|1043|514149-101010,469|724|5169DD,473|1070|5FB2F4,690|972|9BB4CC",0.9) = 1 Then
         TracePrint "test isUpdateScene true"
         isUpdateScene= True
     Else
-        TracePrint "test isUpdateScene fail"
+        // TracePrint "test isUpdateScene fail"
         isUpdateScene= False
     End If
 End Function
-
 Function isDisConnectScene()
-    If CmpColorEx("693|800|3A4B6C-202020,650|872|9BB4CC-202020,490|893|5FB2F4-202020,448|1032|5FB2F4,510|1051|273D98,442|820|9BB4CC",0.9) = 1 Then
+    If CmpColorEx("693|800|3A4B6C-101010,650|872|9BB4CC-101010,490|893|5FB2F4-101010,448|1032|5FB2F4,510|1051|273D98,442|820|9BB4CC",0.9) = 1 Then
         TracePrint "test isDisConnectScene true"
         isDisConnectScene= True
     Else
-        TracePrint "test isDisConnectScene fail"
+        // TracePrint "test isDisConnectScene fail"
         isDisConnectScene= False
     End If
 End Function
-
 Function isNetErrorScene()
-    If CmpColorEx("774|442|060809-202020,457|1479|010101-202020,362|754|D4D4D4-202020,369|1169|D6D6D6,366|442|969696,365|1453|959595",0.9) = 1 Then
+    If CmpColorEx("774|442|060809-101010,457|1479|010101-101010,362|754|D4D4D4-101010,369|1169|D6D6D6,366|442|969696,365|1453|959595",0.9) = 1 Then
         TracePrint "test isNetErrorScene true"
         isNetErrorScene= True
     Else
-        TracePrint "test isNetErrorScene fail"
+        // TracePrint "test isNetErrorScene fail"
         isNetErrorScene= False
     End If
 End Function
-
 Function isYgtzScene()
     If CmpColorEx("1002|14|8AB6D4,185|22|7F9EC2,31|1709|8EC1DC,976|1845|95C0D6,9|1032|8EBBD6",0.9) = 1 Then
         TracePrint "test isYgtzScene true"
         isYgtzScene = True
     Else
-        TracePrint "test isYgtzScene false"
+        // TracePrint "test isYgtzScene false"
         isYgtzScene = False
     End If
 End Function
-
 Function isYgtzStartScene()
     If CmpColorEx("313|1343|5FB2F4,263|1503|5FB2F4,184|1405|1A1A22,888|410|263748,888|1439|263748,860|1583|CCD4E5",0.9) = 1 Then
         TracePrint "test isYgtzStartScene true"
         isYgtzStartScene = True
     Else
-        TracePrint "test isYgtzStartScene false"
+        // TracePrint "test isYgtzStartScene false"
         isYgtzStartScene = False
     End If
 End Function
-
 Function disConnectEndScene()
     If CmpColorEx("477|876|5FB2F4,424|1042|60B3F5,698|683|95AEC6,726|1264|334465,352|656|324364,352|1257|324364",0.9) = 1 Then
         TracePrint "test disConnectEndScene true"
         disConnectEndScene = True
     Else
-        TracePrint "test disConnectEndScene false"
+        // TracePrint "test disConnectEndScene false"
         disConnectEndScene = False
     End If
 End Function
-
-
 Function getStrengthGift()
-    If CmpColorEx("398|680|225FDF-101010",0.9) = 1 Then
+    Dim intX,intY
+    FindColor 308,1067,425,1185,"2462FF-050505",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then 
         ShowMessage "领取体力"
-        Touch 390, 679, 100
-        Touch 365,702,100		
+        Touch intX, intY, 100
+        Touch intX + 20, intY + 20, 100
+        Delay 3000
+        touchUnknow          
+        touchUnknow          
+        Delay 2000
     End If
 End Function
 
 Function openBaoxiang()
     Dim intX,intY
-    FindColor 0,0,0,0,"192CB3",0,1.0,intX,intY
+    FindColor 0,0,0,0,"1A3AB7",0,1.0,intX,intY
     If intX > -1 And intY > -1 Then 
         ShowMessage "宝箱发现"
         Touch intX, intY, 100
         Touch intX-20,intY+20,100
     End If
 End Function
-
 Function openShiju()
     Dim intX,intY
     FindColor 0,0,0,0,"4650E2",0,1.0,intX,intY
@@ -1059,7 +1183,43 @@ Function openShiju()
         Touch intX+50,intY+50,100
     End If
 End Function
-
+Function isHdScene()
+    If CmpColorEx("980|54|C9C9C9,985|199|C9C9C9,983|348|C9C9C9,981|503|C9C9C9,982|683|000000,1024|1537|000000,830|955|222736",0.95) = 1 Then
+        TracePrint "test isHdScene true"
+        isHdScene = True
+    Else
+        // TracePrint "test isHdScene false"
+        isHdScene = False
+    End If
+End Function
+// 式神碎片
+Function isSsspScene()
+    If CmpColorEx("895|355|202939,898|1534|202939,875|1571|2B2B54,837|1575|CED6E7,188|489|1A1A22,185|1381|1B1B23,407|1562|45566E",0.95) = 1 Then
+        TracePrint "test isSsspScene true"
+        isSsspScene = True
+    Else
+        // TracePrint "test isSsspScene false"
+        isSsspScene = False
+    End If
+End Function
+Function isExitFightScene()
+    If CmpColorEx("728|656|32425F,723|962|2D3D5E,725|1259|324364,422|1209|5FB2F4,422|693|5FB2F4,445|954|9BB4CC",0.95) = 1 Then
+        TracePrint "test isExitFightScene true"
+        isExitFightScene = True
+    Else
+        // TracePrint "test isExitFightScene false"
+        isExitFightScene = False
+    End If
+End Function
+Function isExitFubenScene()
+    If CmpColorEx("669|536|9BB4CC,396|1382|9BB4CC,484|648|5FB2F4,480|1262|5FB2F4,533|948|9BB4CC,652|1361|9BB4CC",0.9) = 1 Then
+        TracePrint "test isExitFubenScene true"
+        isExitFubenScene= True
+    Else
+        // TracePrint "test isExitFubenScene fail"
+        isExitFubenScene= False
+    End If
+End Function
 Function isYgfxScene()
     //石距
     Dim shju=(CmpColorEx("948|169|272C40,879|174|404A69,262|1524|C2DAE3,924|1709|9995E3,919|1504|353DE2,926|1435|3A4BF5,909|1564|D1D9E1",1.0) = 1)
@@ -1069,59 +1229,261 @@ Function isYgfxScene()
         TracePrint "test isYgfxScene true"
         isYgfxScene = True
     Else
-        TracePrint "test isYgfxScene false"
+        // TracePrint "test isYgfxScene false"
         isYgfxScene = False
     End If
 End Function
 
-// function
-Function sweepFuben()
-    Dim x1=882,y1=200 // x1=882
-    Dim x2=124,y2=1807
-    Dim i=x1,j=y1
-    For i = x1 To x2 Step -100
-        For j = y2 To y1 Step -100
-            // 从上到下，从右到左
-            Tap i,j
-        Next
-        If isFubenScene() <> True Then
-            Exit For
-        End If
-    Next
-    Delay 1200
+Function isMissionScene()
+    If CmpColorEx("849|684|CDDDE5,786|656|CEDEE6,798|779|CDDDE5,838|1595|5FB2F4,858|1450|5FB2F4,974|1775|CED6E7",1.0) = 1 Then
+        TracePrint "test isMissionScene true"
+        isMissionScene = True
+    Else
+        isMissionScene = False
+    End If
+End Function
+// 副本组队界面
+Function isFubenTeamScene()
+    If CmpColorEx("133|521|334465,132|740|344566,200|814|5169DD,220|1224|5FB2F4,134|1171|364768,132|1385|314263,890|1367|8FA9C1",1.0) = 1 Then
+        TracePrint "test isFubenTeamScene true"
+        isFubenTeamScene = True
+    Else
+        isFubenTeamScene = False
+    End If
 End Function
 
-Function sweepFuben2()
+Function watchExp1()
     Dim intX,intY
+    FindColor 318,1028,612,1222,"1DA1FB-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then 
+        watchExp1 = True
+    Else 
+        watchExp1=False
+    End If
+End Function
+
+Function watchExp2()
+    Dim intX,intY
+    FindColor 493,656,718,777,"1DA1FB-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then 
+        watchExp2 = True
+    Else 
+        watchExp2=False
+    End If
+End Function
+
+Function watchExp3()
+    Dim intX,intY
+    FindColor 551,337,753,509,"1DA1FB-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then 
+        watchExp3 = True
+    Else 
+        watchExp3=False
+    End If
+End Function
+
+Function watchExp4()
+    Dim intX,intY
+    FindColor 737,427,884,521,"1DA1FB-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then 
+        watchExp4 = True
+    Else 
+        watchExp4=False
+    End If
+End Function
+
+Function watchExp5()
+    Dim intX,intY
+    FindColor 763,568,976,687,"1DA1FB-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then 
+        watchExp5 = True
+    Else 
+        watchExp5=False
+    End If
+End Function
+
+Function exchangeExpMon()
+    KeepCapture
+    Dim f1=watchExp1()
+    Dim f2=watchExp2()
+    Dim f3=watchExp3()
+    Dim f4=watchExp4()
+    Dim f5=watchExp5()
+    ShowMessage iif(f1<>True,0,1)&":"&iif(f2<>True,0,1)&":"&iif(f3<>True,0,1)&":"&iif(f4<>True,0,1)&":"&iif(f5<>True,0,1)
+    If (f1 And LeaderInx <> 1) Or ( f2 And LeaderInx <> 2) Or (f3 And LeaderInx <> 3) Then 
+        Touch 312, 667, 100
+        Touch 297, 758, 100
+        Delay 3000
+        // 全部
+        Touch 255, 101, 100
+        Delay 1000
+        // 选卡
+        Select Case ChildState
+        Case 0   	
+            // N卡
+            Touch 593,95, 100
+        Case 1   
+            // R卡
+            Touch 541,263, 100
+        Case 2
+            // SR
+            Touch 418,387,100
+        Case 3
+            //SSR
+            Touch 255,443,100
+        End Select
+        Delay 1000
+        // 滑动次数
+        For ChildPage
+            Swipe 154, 1487, 154, 698, 100
+        Next
+        Delay 1000
+        
+        If f3 And LeaderInx <> 3 Then 
+            Swipe 176,1383, 597,1603
+            Delay 200
+            Swipe 176,1383, 597,1603
+            Delay 1000
+        End If
+        
+        If f2 And LeaderInx <> 2 Then 
+            Swipe 183, 1192, 543,965
+            Delay 200
+            Swipe 183, 1192, 543, 965
+            Delay 1000
+        End If
+        
+        If f1 And LeaderInx <> 1 Then 
+            Swipe 166,984,539,301
+            Delay 200
+            Swipe 166,984,539,301
+            Delay 1000
+        End If        
+        // 返回
+        Touch 1021,53,100
+        Delay 2000
+        //交替
+        //Touch 90,101,100
+    End If    
+    If f4 Or f5 Then 
+        changeShiShen(f4,f5)
+    End If
+    ReleaseCapture
+End Function
+
+// 更换式神
+Function changeShiShen(f1,f2)
+    Delay 2000
+    // 式神
+    Touch 808, 526, 100
+    Touch 814, 627, 100
+    Delay 3000
+    // 全部
+    Touch 243, 99, 100
+    Delay 1000
+    
+    Select Case ChildState
+    Case 0   	
+        // N卡
+        Touch 586, 100, 100
+    Case 1   
+        // R卡
+        Touch 553, 264, 100
+    Case 2
+        // SR
+        Touch 427,396,100
+    Case 3
+        //SSR
+        Touch 256,440,100
+    End Select
+    Delay 1000
+    
+    For ChildPage
+        Swipe 154, 1487, 154, 698, 100
+    Next
+    Delay 1000
+    If f1 Then     	
+        // 更换观战1
+        Swipe 170, 1380, 773, 555
+        Delay 200
+        Swipe 170, 1380, 773, 555
+        Delay 1000
+    End If    
+    If f2 Then    	
+        // 更换观战2
+        Swipe 170, 1187, 773, 1166
+        Delay 200
+        Swipe 170, 1187, 773, 1166
+    End If
+    // 返回
+    Touch 1021,53,100
+    Delay 2000
+End Function
+
+// function
+//Function sweepFuben()
+//    Dim x1=882,y1=200 // x1=882
+//    Dim x2=124,y2=1807
+//    Dim i=x1,j=y1
+//    For i = x1 To x2 Step -100
+//        For j = y2 To y1 Step -100
+//            // 从上到下，从右到左
+//            Tap i,j
+//        Next
+//        If isFubenScene() <> True Then
+//            Exit For
+//        End If
+//    Next
+//    Delay 1200
+//End Function
+Function sweepFuben2()
+    Dim intX,intY,intM,intN
     Dim i,j
     ReleaseCapture 
     Dim onceFind=False
     Dim isEnd=False
-    For 12    	
+    For 9  	
         Dim find=False
-        For 5
-            FindColor 0,0,0,0,"7A622A",0,1,intX,intY
+        For 6        	
+            If MapState = 5 Then 
+                ShowMessage "被动模式，不自动选怪"
+                Delay 2500
+                // 不是副本界面，退出
+                If isFubenScene() <> True Then 
+                    find=True
+                    onceFind=True
+                End If
+                // 组队状态，不扫描
+                Exit For
+            End If      
+            // 金蓝 "748473|7A622A"
+            // 7A622A
+            FindColor 0, 0, 0, 0, "748473|7A622A", 1, 1.0, intX, intY            
             If intX > -1 And intY > -1 Then 
-                Find = True
-                onceFind=True
+                TracePrint "经验怪"
+                find = True
+                // onceFind=True
                 For j = 0 To 1
-                    For i = 1 To 3
+                    For i = 3 To 1 Step -1
                         TouchDown intX+i*100,intY+j*50,i
                     Next
+                    TouchDown intX + 2 * 100, intY +(j-1)*50, 4
+                    TouchDown intX + 2 * 100, intY + (j+1)*50, 5
                     Delay 10
-                    For i = 1 To 3
+                    For i = 1 To 5
                         TouchUp i
                     Next
-                    // 让界面停止移动
-                    //sweepStop 
-                    // If isFubenScene() <> True Then
-                    //    Exit For
-                    // End If
+                    Delay 200
+                    If isBuyStrengthScene() Or isFubenScene() <> True Then 
+                        find=True
+                        onceFind=True
+                        Exit For
+                    End If
                 Next
-            End If
+            End If                     
             // 点完界面改变，不管点没点对，都退出
             If isFubenScene() <> True Then 
-                Find=True
+                find=True
                 onceFind=True
                 Exit For
             End If
@@ -1131,76 +1493,146 @@ Function sweepFuben2()
         End If
         If find <> True Then 
             //随机左右滑动
-            Dim rd=Rnd()*2000
-            If rd >=1000 Then     	
-                Swipe 216, 1307, 216, 312,1000
+            Dim rd=SA(saInx)
+            If rd < 1 Then     	
+                Swipe 116, 862, 116, 312,1000
             Else
-                Swipe 216, 312, 216, 1307 ,1000    
+                Swipe 116, 312, 116, 862 ,1000    
+            End If
+            saInx = (saInx + 1) Mod 8
+            Delay 300
+        End If  
+        If fubenEndSweep() Then 
+            ShowMessage "副本结束"
+            isEnd = True	        
+            Exit For
+        End If              
+        If MapState = 5 Then 
+            FindColor 311,24,411,99,"E9F8F8-010101",0,1.0,intX,intY
+            If intX > -1 And intY > -1 Then 		
+                ShowMessage "被动组队状态"
+                TracePrint "被动组队状态"
+            Else 
+                // 被动组队状态队友离开，直接退出
+                ShowMessage "组队状态，队友已离开"
+                TracePrint "组队状态，队友已离开"
+                onceFind = False
+                Exit For
             End If
         End If
-        intX = -1
-        intY=-1
-        // 找箱子
-        FindColor 0, 0, 0, 0, "D3F4FF", 0, 1, intX, intY
-        If intX > -1 And intY > -1 Then 
-            ShowMessage "副本结束"
-            isEnd = True
-            Touch intX, intY, 100
-            Delay 800
-            touchUnknow
-            Exit For
-        End If        
-    Next
-    If isEnd = True Then     	
+    Next	
+    // 找箱子
+    // D3F4FF 有概率在悬赏妖怪身上出现
+    // D3F4FF|0A1317
+    If isEnd = True Then
         For 5
-            FindColor 0, 0, 0, 0, "D3F4FF", 0, 1, intX, intY
-            If intX > -1 And intY > -1 Then          
-                Touch intX, intY, 100
-                Delay 800
-                touchUnknow 
-                Delay 2000
-            End If
+            fubenEndSweep()
         Next
-    ElseIf onceFind <> True Then 
-        //退出
-        Touch 989, 67, 100
-        Delay 1000
-        // 确定
-        Touch 474,1159,100
+    ElseIf onceFind <> True Then
+        exitFuben()
     End If
 End Function
 
+Function fubenEndSweep()
+    Dim rel=False
+    Dim intX = -1
+    Dim    intY = -1
+    If isFubenScene() Then             	
+        FindColor 0, 0, 0, 0, "D3F4FF", 0, 1, intX, intY
+        If intX > -1 And intY > -1 Then          
+            Touch intX, intY, 100
+            Delay 800
+            touchUnknow 
+            rel=True
+            Delay 2000
+        End If
+    End If
+    fubenEndSweep = rel    
+End Function
+
 Function ygtzScan()
-    Dim x1=905,y1=1638
-    Dim x2=190,y2=239
-    For 2    
-        Delay 1000
-        TouchDown x1, y1, 1
-        TouchDown x2, y2,2
-        TouchMove (x1 + x2) / 2, (y1 + y2) / 2, 2
-        Delay 1000
-        TouchMove (x1 + x2) / 2, (y1 + y2) / 2, 1
-        Delay 1000
-        TouchUp 1
-        TouchUp 2
-    Next
-    x1 = 882
-    y1 = 200
-    x2 = 124
-    y2 = 1807
-    Dim i=x1,j=y1
-    For i = x1 To x2 Step -100
-        For j = y2 To y1 Step -100
-            // 从上到下，从右到左
-            Tap i,j
+    //    Dim x1=905,y1=1638
+    //    Dim x2=190,y2=239
+    // 缩小地图（废弃）
+    //    For 2    
+    //        Delay 1000
+    //        TouchDown x1, y1, 1
+    //        TouchDown x2, y2,2
+    //        TouchMove (x1 + x2) / 2, (y1 + y2) / 2, 2
+    //        Delay 1000
+    //        TouchMove (x1 + x2) / 2, (y1 + y2) / 2, 1
+    //        Delay 1000
+    //        TouchUp 1
+    //        TouchUp 2
+    //    Next
+    //    x1 = 882
+    //    y1 = 200
+    //    x2 = 124
+    //    y2 = 1807
+    //    Dim i=x1,j=y1
+    //    For i = x1 To x2 Step -100
+    //        For j = y2 To y1 Step -100
+    //            // 从上到下，从右到左
+    //            Tap i,j
+    //        Next
+    //        If isYgtzScene()<>True Then 
+    //            Exit For
+    //        End If
+    //        Delay 200
+    //    Next
+    Dim intX,intY
+    //"2938AD-020202" 
+    FindColor 0,0,0,0,"2938AD-020202|1838B5-020202|444CD6-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then 
+        For 1
+            Touch intX, intY, 100
+            Touch intX+30,intY+30,100
         Next
-        Delay 200
-    Next
+    Else 
+        ShowMessage "找不到达摩蛋，退出妖怪退治"
+    End If
+    // 直接退出会闪退
+    Delay 1000
+    // 退出按钮
     Touch 996,94,100
 End Function
 
+Function sweepJjtp0()	
+    Dim x1=809,y1=370    
+    Dim finded = False
+    For 45    	
+        Dim p = jjtpInx \ 9 // 第几个索引点
+        Dim inx = jjtpInx Mod 9    // 第几个
+        Dim i = inx Mod 3, j = inx \ 3 
+        // 纵向扫描
+        Dim tx=x1-i*203
+        Dim ty=y1+j*513+p*60 	         
+        If CmpColorEx(tx & "|" & ty & "|8CA2B3-010101", 1.0) = 1 Then 
+            Touch tx, ty, 10
+            Delay 500
+            Touch tx - 84, ty + (4 - p) * 60, 10
+            finded = True
+        End If
+        // point test
+        //Touch tx, ty, 10
+        //Delay 1000
+        //Touch tx, ty, 10
+        //Delay 500
+        // 索引自增    
+        jjtpInx = (jjtpInx + 1)Mod 45
+        If finded Then 
+            Exit For
+        End If
+    Next
+    If finded <> True Then    	
+        // 随机
+        ShowMessage "随机选择对手"
+        sweepJjtp()
+    End If
+End Function
+
 Function sweepJjtp()
-    Dim x1=808,y1=606
+    Dim x1=809,y1=610
     //    809,370|809,886
     //    606,370
     For 3    	
@@ -1218,80 +1650,32 @@ Function sweepJjtp()
     Next
 End Function
 
-Function sweepJjtp0()	
-    Dim x1=808,y1=606
-    Dim finded=False
-    For i = 0 To 2
-        For j = 0 To 2
-            Dim tx=x1-i*203
-            Dim ty=y1+j*513   	    		
-            If CmpColorEx(tx & "|"& ty & "|8CA2B3", 0.95) = 1 Then 
-                If Rnd() * 10000 < 7000 Then 
-                    // 30%的概率跳过
-                    Touch tx, ty, 10
-                    Delay 500
-                    Touch tx - 84, ty, 10
-                    finded = True
-                    Exit For
-                End If           
-            End If
-        Next        
-        If finded Then 
-            Exit For
+Function finishMission()
+    If CmpColorEx("847|1584|5FB2F4",1.0) = 1 Then
+        // 完成
+        Touch 857,1518,100
+        Delay 1000
+    Else
+        // 成就
+        Touch 555,1822,100
+        Delay 1500        
+        If CmpColorEx("847|1584|5FB2F4", 1.0) = 1 Then 
+            // 完成
+            Touch 857, 1518, 100
+            Delay 1000
         End If
-    Next
-    If finded <> True Then 
-        // 随机
-        sweepJjtp()
     End If
+    // 退出
+    windExit
+    touchUnknow
 End Function
 
-// 更换式神
-Function changeShiShen()
-    Delay 2000
-    // 式神
-    Touch 808, 526, 100
-    Touch 814, 627, 100
-	
-    Delay 3000
-    // 全部
-    Touch 243, 99, 100
-    Delay 1000
-    // N卡
-    //Touch 586, 100, 100
-    // R卡
-    Touch 553,264,100
-    Delay 1000
-    For 25
-        Swipe 154, 1487, 154, 698, 100
-    Next
-    Delay 1000
-    If WatchMaxLevel1 Then     	
-        // 更换观战1
-        Swipe 170, 1380, 773, 555
-        Delay 200
-        Swipe 170, 1380, 773, 555
-        Delay 1000
-        WatchMaxLevel1=False
-    End If    
-    If WatchMaxLevel2 Then    	
-        // 更换观战2
-        Swipe 170, 1187, 773, 1166
-        Delay 200
-        Swipe 170, 1187, 773, 1166
-        WatchMaxLevel2=False
-    End If
-    // 返回
-    Touch 1021,53,100
-    Delay 2000
-End Function
 
 Function sendText(msg)
     If isMainOrMapChat() Then 
         Touch 1025, 1842, 100
         Delay 1000
     End If
-    
     ReleaseCapture
     For 5
         If isChatScene() <> True Then
@@ -1306,6 +1690,8 @@ Function sendText(msg)
             // Touch 406,57,100
             // 队伍
             Touch 221, 54, 100
+            Delay 500
+            Touch 221, 54, 100
             Delay 1000
         Else 
             Touch 60, 225, 500
@@ -1317,9 +1703,7 @@ Function sendText(msg)
             Exit For
         End If
     Next
-   
 End Function
-
 // button
 Function entergame()
     For 3
@@ -1327,69 +1711,53 @@ Function entergame()
         Delay 2000		
     Next
 End Function
-
 Function search()	 
     Touch 854, 532, 100
     Touch 854,1790,100
 End Function
-
 // 探索按钮
 Function ts()
     Touch 883,748,100
 End Function
-
 Function jxcl()
     Touch 79,138,100
 End Function
-
 Function yh()
     Touch 79,305,100
 End Function
-
 Function sssp()
     Touch 79,470,100
 End Function
-
 Function jjtp()
     Touch 79,622,100
 End Function
-
 Function zhunbei()
     Touch 254,1750,100
 End Function
-
 Function mapToMain()
     Touch 996,81,100
 End Function
-
 Function fightAsset()
     Touch 38,960,100
 End Function
-
 Function team()
     Touch 336,966,100
 End Function
-
 Function challange()
-    Touch 492,337,100
+    Touch 336,1428,100
 End Function
-
 Function exitTeam()
     Touch 895,1571,100
 End Function
-
 Function freshTeam()
     Touch 136,1141,100
 End Function
-
 Function joinTeam()
     Touch 777,1600,100
 End Function
-
 Function roomStart()
     Touch 178,1470,100
 End Function
-
 Function closeGonggao()
     Touch 806,1596,100
 End Function
@@ -1409,7 +1777,6 @@ End Function
 Function rgtIvt()
     Touch 689,63,100
 End Function
-
 Function createRoom()
     Touch 132,1565,100
 End Function
@@ -1417,39 +1784,30 @@ End Function
 Function crt()
     Touch 222,1365,100
 End Function
-
 Function cancel()
     Touch 429,785,100
 End Function
-
 Function ok()
     Touch 420,1136,100
 End Function
-
 Function jxtlg()
     Touch 177,1599,100
 End Function
-
 Function jxyhl()
     Touch 175,404,100
 End Function
-
 Function jxfzf()
     Touch 175,787,100
 End Function
-
 Function jxsll()
     Touch 175,1141,100
 End Function
-
 Function tingzhong()
     Touch 659,881,100
 End Function
-
 Function closeStrength()
     Touch 786,1405,100
 End Function
-
 Function buyStrength()
     Touch 363,948,100
 End Function
@@ -1458,54 +1816,536 @@ Function fbTansuo()
     Touch 280,1434,100
 End Function
 
+Function fbZudui()
+    Touch 307,1069,100
+End Function
+
 Function xuanshangAct()
     Touch 447,1276,100
 End Function
-
 Function xuanshangRej()
     Touch 298,1276,100
 End Function
-
 Function windExit()
     Touch 977,1777,100
 End Function
-
 // tingzhong 
 Function tingyuan()
     Touch 697,1578,100
 End Function
-
 Function baigui()
     Touch 827,1097,100
 End Function
-
 Function douji()
     Touch 900,866,100
 End Function
-
 Function ygtz()
     Touch 905,628,100
 End Function
-
 Function shoulezhan()
     Touch  886,445,100
 End Function
-
 Function songxin()
     Touch 60, 704, 300
 End Function
-
 Function swipeLeft()
     Swipe 256, 1707, 256, 690, 500
     Swipe 256, 1707, 256, 690, 500
     Delay 500
 End Function
-
 Function touchUnknow()	
     Touch 5, 1915, 100
 End Function
-
 Function sweepStop()
     Swipe 5, 1915, 5, 1912
     Swipe 5, 1912, 5, 1915
+End Function
+Function exitFuben()
+    //退出
+    Touch 989, 67, 100
+    Delay 1000
+    // 确定
+    Touch 474, 1159, 100
+    Delay 2000
+End Function
+
+Function pointMon()	
+    ShowMessage "集火"
+    If curMapState = 4 Or curMapState <= 1 Then 
+        //        Touch 802, 951, 100
+        //        Touch 749, 1138, 100
+        //        Touch 712, 1445, 100
+        Touch 822,1294, 100
+        Touch 881,1283,100
+    Else                 	
+        Touch 710,464,100
+        Touch 662,710,100      
+        Touch 710,1206,100
+        Touch 732,1421,100
+        // 中间
+        Touch 696,958,100
+    End If
+End Function
+
+
+Function iif(b, t, f)
+    If b Then 
+        iif = t
+    Else 
+        iif =f
+    End If
+End Function
+
+Function fubenQiYu()
+    // 中间
+    Touch 607, 945, 50
+    // 上面
+    Touch 654, 739, 50
+    // 下面
+    Touch 537,1157,50
+End Function
+
+Function fubenEmy()
+    Touch 793, 955, 10	
+    Touch 753,1176, 10
+    Touch 700, 1443, 10	
+    Touch 843,1048, 10
+    Touch 783,1502, 10
+    Touch 838,1251, 10
+End Function
+
+
+//------------------------兔子天团模式--------------------------------
+
+Function tuziRun()
+    Delay 3000
+    While True
+        KeepCapture         
+        If isMapScene() Then 
+            yh             
+        ElseIf isMainScene() Then
+            // 屏幕划到最左边
+            swipeLeft 
+            ShowMessage "探索"
+            ts 
+        ElseIf isYhSelectScene() Then
+            // 选择八岐大蛇御魂
+            Touch 469, 557, 100
+        ElseIf isTeamScene() Then
+            Swipe 490, 594, 846, 587
+            Delay 1000
+            // 魂8
+            // Touch 728,609,100
+            // 魂九
+            Touch 618, 604, 100
+            // 魂十
+            // Touch 496, 610, 100
+            
+            Delay 300
+            // 组队
+            // team 
+            // 挑战
+            challange
+        ElseIf isReadyScene() Then
+            ShowMessage "准备战斗"            
+            zhunbei()
+            Delay 800
+        ElseIf isWinScene() Then
+            ShowMessage "战斗胜利"            
+            For 7
+                // If isMapScene() <> True Then         			
+                fightAsset 
+                Delay 300
+                // End If
+            Next            
+        ElseIf isRewardScene() Then
+            ShowMessage "领取奖励"
+            For 3
+                If isMapScene() <> True Then         			
+                    fightAsset 
+                    Delay 300
+                End If
+            Next
+        ElseIf isFailScene() Then
+            ShowMessage "战斗失败"
+            fightAsset 
+        ElseIf isFighting() Then
+            ShowMessage "正在战斗中"
+            If dirMoved() Then 
+                Touch 220, 60, 100
+                ShowMessage "等待视角复位"
+                Delay 4000
+            End If
+            setHand 
+            KeepCapture 
+            If isEmyAtk() Then 
+                // 等待中
+                //Delay 500
+            ElseIf isTuzi() Then
+                ShowMessage "兔子"
+                unKnowInx = 0
+                skill2 
+                //兔子有可能断火
+                touchEmy                
+                touchUs 
+            ElseIf isShfagui() Then
+                ShowMessage "食发鬼"
+                unKnowInx = 0
+                skill3 
+                touchEmy                  
+            ElseIf isZuofu() Then 
+                ShowMessage "座敷童子"
+                unKnowInx = 0
+                skill3 
+                touchUs
+            ElseIf isNiao() Then
+                ShowMessage "姑获鸟"
+                unKnowInx = 0
+                Delay 1000
+                If canFireAtk() Then 
+                    skill3
+                End If
+                touchEmy
+            ElseIf isShenle() Then
+                ShowMessage "神乐"
+                unKnowInx = 0
+                If (isJifeng() And fire3()) Then 
+                    // 如果有三个以上的火,放疾风
+                    skill3 
+                    us2 
+                ElseIf isYu() Then
+                    // 带的是鱼，放大不放鱼(鱼无法被加速)
+                    skill3 
+                    touchEmy
+                Else                             
+                    skill2 
+                    touchEmy 
+                    touchThing 
+                End If
+            ElseIf isYuanboya() Then
+                ShowMessage "源博雅"
+                unKnowInx = 0
+                If skill3Enable() Then 
+                    skill3                 	
+                Else
+                    skill2
+                End If
+                touchThing
+                touchEmy
+            ElseIf isJiutun() Then
+                ShowMessage "酒吞童子"
+                unKnowInx = 0
+                touchEmy 
+            ElseIf isXuanshangIvtScene() Then
+                If Xsrw Then         
+                    // 悬赏接受
+                    xuanshangAct()             
+                    ShowMessage "接受悬赏任务"
+                Else         	
+                    // 拒绝
+                    xuanshangRej()            
+                    ShowMessage "拒绝悬赏任务"
+                End If
+            Else
+                ShowMessage "未知式神:"&unKnowInx
+                If unKnowInx >= 5 Then 
+                    // 未知式神出现三次，视为被未知式神卡住了
+                    touchEmy
+                End If
+                unKnowInx = (unKnowInx + 1) Mod 6
+                // touchEmy                
+            End If
+        End If
+        ReleaseCapture
+        Delay 1000
+    Wend
+End Function
+
+// 设置手动
+Function setHand()
+    ReleaseCapture
+    For 3
+        If isNotAuto()<>True Then 
+            ShowMessage "设置手动战斗"
+            Touch 92, 87, 100
+            Delay 2000
+        End If
+    Next
+End Function
+
+Function dirMoved()
+    Dim rel=False
+    Dim intX,intY
+    FindColor 178,40,240,91,"3072A4",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then
+        // Touch 220,60,100
+        rel=True
+    End If
+    dirMoved=rel
+End Function
+
+Function skill1()
+    Touch 87, 1476, 100
+    Delay 300
+End Function
+
+Function skill2()
+    Touch 81, 1640, 100
+    Delay 300
+End Function
+
+Function skill3()
+    Touch 94, 1815, 100
+    Delay 300
+End Function
+
+Function touchEmy()
+    Dim x1=800,y1=491   
+    
+    // 先打左边
+    For i = -1 To 1
+        Touch x1, y1 + i * 50, 5
+        Delay 5
+    Next
+    
+    // 再打右边
+    y1 = 1408
+    For i = -1 To 1
+        Touch x1, y1 + i * 50, 5
+        Delay 5
+    Next
+   
+    // 再打中间
+    y1 = 942
+    For i = -1 To 1
+        Touch x1, y1 + i * 50, 5
+        Delay 5
+    Next
+End Function
+
+Function touchUs()
+    Dim x1=321,y1=271
+    For i = 0 To 4
+        Touch x1,y1 + i * 300,10
+        Delay 80
+    Next
+End Function
+
+Function touchThing()
+    Dim x1=586,y1=486
+    For i = 6 To 0 Step -1
+        Touch x1, y1 + i * 200, 5
+        Delay 5
+    Next
+End Function
+
+Function us1()
+    Touch 364,266,100
+End Function
+
+Function us2()
+    Touch 425,561,100
+End Function
+
+Function us3()
+    Touch 364,899,100
+End Function
+
+Function us4()
+    Touch 428,1231,100
+End Function
+
+Function us5()
+    Touch 442,1561,100
+End Function
+
+Function isTuzi()
+    If CmpColorEx("118|1504|18252A,106|1491|1C262D,80|1504|1E3528,38|1519|060D0C,124|1456|333689",1.0) = 1 Then
+        TracePrint "test isTuzi true"
+        isTuzi= True
+    Else
+        isTuzi= False
+    End If
+End Function
+
+Function isZuofu()	
+    If CmpColorEx("115|1517|6B1D00,97|1483|F1FFF3,115|1435|270B00,45|1489|9D3B00,111|1519|741F00",1.0) = 1 Then
+        TracePrint "test isZuofu true"
+        isZuofu= True
+    Else
+        // TracePrint "test isZuofu fail"
+        isZuofu= False
+    End If
+End Function
+
+Function isNiao()
+    If CmpColorEx("68|1480|5F3217,70|1502|772843,108|1515|401127,122|1486|140A05,115|1438|320C1E",1.0) = 1 Then
+        TracePrint "test isNiao true"
+        isNiao= True
+    Else
+        // TracePrint "test isNiao fail"
+        isNiao= False
+    End If
+End Function
+
+Function isShfagui()
+    If CmpColorEx("94|1458|DD07FC,117|1441|200020,103|1515|500138,53|1511|2F00D7,113|1433|2A002A",1.0) = 1 Then
+        TracePrint "test isShfagui true"
+        isShfagui= True
+    Else
+        // TracePrint "test isShfagui fail"
+        isShfagui= False
+    End If
+End Function
+
+Function isShenle()
+    If CmpColorEx("110|1437|F7F7F8,69|1479|EB84FF,103|1508|F3C8FF,126|1498|B96ECD,57|1518|4E2555",1.0) = 1 Then
+        TracePrint "test isShenle true"
+        isShenle= True
+    Else
+        // TracePrint "test isShenle fail"
+        isShenle= False
+    End If
+End Function
+
+Function isJiutun()
+    If CmpColorEx("57|1509|7990AC,85|1503|788FAA,109|1514|836949,122|1496|82683F,113|1436|0C090D",1.0) = 1 Then
+        TracePrint "test isJiutun true"
+        isJiutun= True
+    Else
+        // TracePrint "test isJiutun fail"
+        isJiutun= False
+    End If
+End Function
+
+Function canFireAtk()
+    // 进度5
+    KeepCapture 
+    Dim intX=-1,intY=-1
+    FindColor 3,1238,21,1315,"EFB434-202020|F9E680-202020",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then
+        TracePrint "进度5"
+        If fire5() Then 
+            TracePrint "5火"
+            canFireAtk = True
+        Else         	
+            canFireAtk = False
+        End If
+    Else
+        // 进度4
+        intX = -1
+        intY = -1
+        FindColor 6,1143,19,1213,"EFB434-202020|F9E680-202020",0,1.0,intX,intY
+        If intX > -1 And intY > -1 Then
+            TracePrint "进度4"
+            If fire7() Then 
+                TracePrint "7火"
+                canFireAtk = True
+            Else         	
+                canFireAtk = False
+            End If
+        Else
+            canFireAtk = False
+        End If
+    End If
+    ReleaseCapture
+End Function
+
+Function fire7()
+    If CmpColorEx("39|1230|D7B647,39|1237|DAB746,41|1242|DBB633-020202,41|1248|DDB733",1.0) = 1 Then
+        TracePrint "test fire7 true"
+        fire7= True
+    Else
+        TracePrint "test fire7 fail"
+        fire7= False
+    End If
+End Function
+
+Function fire6()
+    // 六个火
+    If CmpColorEx("41|1162|D8B534,41|1171|DAB633,41|1179|DDB631-020202,41|1187|D8B831",1.0) = 1 Then
+        TracePrint "test fire6 true"
+        fire6= True
+    Else
+        TracePrint "test fire6 fail"
+        fire6= False
+    End If
+End Function
+
+Function fire5()
+    // 五个火
+    If CmpColorEx("41|1095|D8B534,40|1111|DDB633,39|1120|D6BA45-020202",1.0) = 1 Then
+        TracePrint "test fire5 true"
+        fire5= True
+    Else
+        TracePrint "test fire5 fail"
+        fire5= False
+    End If
+End Function
+
+Function fire3()
+    If CmpColorEx("40|962|D7B652,40|967|D9B64F,42|974|DEB52F-020202,42|983|DBB930",1.0) = 1 Then
+        TracePrint "test fire3 true"
+        fire3= True
+    Else
+        TracePrint "test fire3 fail"
+        fire3= False
+    End If
+End Function
+
+// 神乐疾风技能可用
+Function isJifeng()
+    If CmpColorEx("76|1773|DABAF1,78|1797|D2A9ED,63|1832|B973E5-020202,120|1816|D5B8E8,112|1841|6F1C98",1.0) = 1 Then
+        TracePrint "test isJifeng true"
+        isJifeng= True
+    Else
+        // TracePrint "test isJifeng fail"
+        isJifeng= False
+    End If
+End Function
+
+// 神乐-鱼可用
+Function isYu()
+    If CmpColorEx("96|1669|742DB5,100|1689|5E1E76,63|1666|8534B1,109|1623|9041BD,47|1670|762BA8",1.0) = 1 Then
+        TracePrint "test isYu true"
+        isYu= True
+    Else
+        isYu= False
+    End If
+End Function
+
+Function isYuanboya()
+    If CmpColorEx("44|1505|000031,95|1510|000000,114|1496|000085,111|1475|FFFFFF,74|1439|2E2EA4",1.0) = 1 Then
+        TracePrint "test isYuanboya true"
+        isYuanboya= True
+    Else
+        isYuanboya= False
+    End If
+End Function
+
+Function skill2Enable()
+    If CmpColorEx("10|1672|182142,14|1676|182142,19|1676|182142,24|1672|182142",1.0) = 1 Then
+        TracePrint "test skill2Enable true"
+        skill2Enable= True
+    Else
+        skill2Enable= False
+    End If
+End Function
+
+Function skill3Enable()
+    If CmpColorEx("16|1845|182142,7|1841|182142,21|1815|182142,7|1816|182142",1.0) = 1 Then
+        TracePrint "test skill3Enable true"
+        skill3Enable= True
+    Else
+        skill3Enable= False
+    End If
+End Function
+// 当前是否是敌人攻击状态
+Function isEmyAtk()
+    If CmpColorEx("45|1839|1A1A2A,12|1836|13131C,19|1742|12121B,46|1732|1A1A2A,16|1601|13131B,49|1552|1A1A2A",1.0) = 1 Then
+        TracePrint "test isEmyAtk true"
+        isEmyAtk= True
+    Else
+        isEmyAtk= False
+    End If
 End Function
