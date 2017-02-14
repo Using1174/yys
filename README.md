@@ -19,7 +19,7 @@
 - 断线自动重连登陆
 
 截图：
-![设置截图](http://github.com/using1174/yys/raw/master/setting.png)
+![image](https://raw.githubusercontent.com/using1174/yys/master/setting.png)
 
 使用方式：
 	将脚本放入SD卡 MobileAnjian/Scripts目录下，在手机按键精灵中打开，根据个人需要设置完成后，运行即可
