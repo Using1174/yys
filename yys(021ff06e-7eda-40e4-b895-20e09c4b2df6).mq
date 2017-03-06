@@ -28,6 +28,7 @@ Dim MainState=0 //0-探索，1-町中
 Dim ConFailTimes=0 // 连续失败次数
 Dim StrengthEnough=True// 体力是否充足
 Dim unKnowInx = 0 // 手动识别指示
+Dim FirstMap=True // 是否第一次出现地图界面
 // Dim WatchMaxLevel1=False,WatchMaxLevel2=False // 观战式神是否达到满级
 
 Dim jjtpInx=0 //结界突破攻击索引
@@ -170,7 +171,11 @@ Function startFight()
                 ShowMessage "领取任务奖励"
                 Touch 204, 1091, 100
                 Delay 1000
-            Else            	      
+            Else 
+                ReleaseCapture
+                If isInvited() Then 
+                    actIvt 
+                End If
                 // 屏幕划到最左边
                 swipeLeft 
                 //探索
@@ -202,6 +207,7 @@ Function startFight()
             For 6
                 If ConFailTimes >= 2 Then 
                     // 连败不接受邀请
+                    ShowMessage "连败不接受邀请"
                     Exit For
                 ElseIf isInvited() Then 
                     actIvt 
@@ -226,9 +232,12 @@ Function startFight()
                     ShowMessage "刷副本"
                     saInx = 0
                     // 重置
-                    For 4
-                        Swipe 121, 1761, 800, 1761	
-                    Next
+                    If FirstMap Then 
+                        FirstMap=False
+                        For 4
+                            Swipe 121, 1761, 800, 1761	
+                        Next
+                    End If
                     Delay 1200
                     // 行高177
                     Dim se = FubenSelect                    
@@ -466,9 +475,9 @@ Function startFight()
             
             If MapState = 6 Or MapState=7 Then 
                 ShowMessage ""
-                Delay 200
+                Delay 500
                 fbZudui 
-                Delay 2000
+                Delay 1500
             Else             
                 ShowMessage "副本探索"
                 fbTansuo
@@ -499,7 +508,8 @@ Function startFight()
             // 取消
             // Touch 220,754,100
             // 邀请
-            Touch 224,1162,100            
+            Touch 224, 1162, 100
+            Delay 2000
         ElseIf isJjtpScene() Then
             curMapState=3
             ShowMessage "结界突破"
@@ -880,7 +890,7 @@ Function isInTeamScene()
     End If
 End Function
 Function isRoomScene()
-    If CmpColorEx("911|231|A7B1BB,183|344|5169DD,181|568|5169DD,186|1656|B5BDC6,988|1692|263748",0.9) = 1 Then
+    If CmpColorEx("225|1297|B5BDC6-020202,181|451|5169DD,169|249|5169DD,85|291|191921,987|208|263748,994|1740|263748",1.0) = 1 Then
         TracePrint "test isRoomScene true"
         isRoomScene= True
     Else
@@ -1302,6 +1312,26 @@ Function watchExp5()
     End If
 End Function
 
+Function watchTeamExp1()
+    Dim intX,intY
+    FindColor 103,749,338,900,"1DA1FB-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then
+        watchTeamExp1=True
+    Else 
+        watchTeamExp1=False
+    End If
+End Function
+
+Function watchTeamExp2()
+    Dim intX,intY
+    FindColor 402,36,659,196,"1DA1FB-020202",0,1.0,intX,intY
+    If intX > -1 And intY > -1 Then
+        watchTeamExp2=True
+    Else 
+        watchTeamExp2=False
+    End If
+End Function
+
 Function exchangeExpMon()
     KeepCapture
     Dim f1=watchExp1()
@@ -1311,34 +1341,7 @@ Function exchangeExpMon()
     Dim f5=watchExp5()
     ShowMessage iif(f1<>True,0,1)&":"&iif(f2<>True,0,1)&":"&iif(f3<>True,0,1)&":"&iif(f4<>True,0,1)&":"&iif(f5<>True,0,1)
     If (f1 And LeaderInx <> 1) Or ( f2 And LeaderInx <> 2) Or (f3 And LeaderInx <> 3) Then 
-        Touch 312, 667, 100
-        Touch 297, 758, 100
-        Delay 3000
-        // 全部
-        Touch 255, 101, 100
-        Delay 1000
-        // 选卡
-        Select Case ChildState
-        Case 0   	
-            // N卡
-            Touch 593,95, 100
-        Case 1   
-            // R卡
-            Touch 541,263, 100
-        Case 2
-            // SR
-            Touch 418,387,100
-        Case 3
-            //SSR
-            Touch 255,443,100
-        End Select
-        Delay 1000
-        // 滑动次数
-        For ChildPage
-            Swipe 154, 1487, 154, 698, 100
-        Next
-        Delay 1000
-        
+        swipeMainWatch()
         If f3 And LeaderInx <> 3 Then 
             Swipe 176,1383, 597,1603
             Delay 200
@@ -1367,8 +1370,58 @@ Function exchangeExpMon()
     End If    
     If f4 Or f5 Then 
         changeShiShen(f4,f5)
+    End If    
+    If MapState = 6 Or MapState = 7 Then     	
+        Dim f6=watchTeamExp1()
+        Dim f7=watchTeamExp2()
+        If f6 Or f7 Then 
+        	swipeMainWatch 
+        	If f6 Then 
+        		Swipe 177, 1501, 581, 504
+        		Delay 2000
+        		Swipe 177, 1501, 581, 504
+        		Delay 1000
+        	End If        	
+        	If f7 Then 
+        		Swipe 159, 1285, 568, 1406
+        		Delay 2000
+        		Swipe 159, 1285, 568, 1406
+        		Delay 1000
+        	End If
+        End If
     End If
+    
     ReleaseCapture
+End Function
+
+Function swipeMainWatch()	
+    Touch 312, 667, 100
+    Touch 297, 758, 100
+    Delay 3000
+    // 全部
+    Touch 255, 101, 100
+    Delay 1000
+    // 选卡
+    Select Case ChildState
+    Case 0   	
+        // N卡
+        Touch 593,95, 100
+    Case 1   
+        // R卡
+        Touch 541,263, 100
+    Case 2
+        // SR
+        Touch 418,387,100
+    Case 3
+        //SSR
+        Touch 255,443,100
+    End Select
+    Delay 1000
+    // 滑动次数
+    For ChildPage
+        Swipe 154, 1487, 154, 698, 100
+    Next
+    Delay 1000
 End Function
 
 // 更换式神
@@ -1507,11 +1560,11 @@ Function sweepFuben2()
             isEnd = True	        
             Exit For
         End If              
-        If MapState = 5 Then 
+        If MapState >= 5 And MapState<=7 Then 
             FindColor 311,24,411,99,"E9F8F8-010101",0,1.0,intX,intY
             If intX > -1 And intY > -1 Then 		
-                ShowMessage "被动组队状态"
-                TracePrint "被动组队状态"
+                ShowMessage "组队状态:"&MapState
+                TracePrint "组队状态:"&MapState
             Else 
                 // 被动组队状态队友离开，直接退出
                 ShowMessage "组队状态，队友已离开"
