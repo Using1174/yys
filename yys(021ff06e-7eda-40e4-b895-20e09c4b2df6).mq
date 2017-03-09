@@ -1376,13 +1376,13 @@ Function exchangeExpMon()
         Dim f7=watchTeamExp2()
         If f6 Or f7 Then 
         	swipeMainWatch 
-        	If f6 Then 
+        	If f6 And LeaderInx <> 1 Then 
         		Swipe 177, 1501, 581, 504
         		Delay 2000
         		Swipe 177, 1501, 581, 504
         		Delay 1000
         	End If        	
-        	If f7 Then 
+        	If f7 And LeaderInx <> 2 Then 
         		Swipe 159, 1285, 568, 1406
         		Delay 2000
         		Swipe 159, 1285, 568, 1406
@@ -1653,6 +1653,8 @@ End Function
 Function sweepJjtp0()	
     Dim x1=809,y1=370    
     Dim finded = False
+    Delay 1000
+    KeepCapture
     For 45    	
         Dim p = jjtpInx \ 9 // 第几个索引点
         Dim inx = jjtpInx Mod 9    // 第几个
